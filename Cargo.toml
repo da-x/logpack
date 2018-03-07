@@ -1,0 +1,14 @@
+[workspace]
+
+members = [
+    "logpack",
+    "logpack-derive",
+    "logpack-ron",
+    "test",
+]
+
+[profile.custom.lto]
+inherits = "release"
+debug = false
+lto = true
+codegen-units = 1

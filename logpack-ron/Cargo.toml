@@ -1,0 +1,9 @@
+[package]
+name = "logpack-ron"
+version = "0.1.0"
+authors = ["Dan Aloni <alonid@gmail.com>"]
+
+[dependencies]
+logpack = { path = "../logpack" }
+ansi_term = "*"
+ron = "*"
