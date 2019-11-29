@@ -1,0 +1,4 @@
+[package]
+name = "hexdump"
+version = "0.1.0"
+authors = ["Dan Aloni <dan@kernelim.com>"]

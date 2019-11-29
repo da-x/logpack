@@ -22,6 +22,7 @@ impl<'a> Repr<'a> {
 }
 
 static NUM: Colour       = RGB(255, 200,   0);
+static PTR: Colour       = RGB(255, 200, 100);
 static STR: Colour       = RGB(0,   192, 255);
 static VOID: Colour      = RGB(80,   80,  80);
 static PUNCT: Colour     = RGB(255, 255, 180);
@@ -68,6 +69,10 @@ impl<'a> Callbacks for Repr<'a> {
 
     fn handle_bool(&mut self, val: bool)  {
         self.output.push(NUM.paint(val.to_string()));
+    }
+
+    fn handle_raw_ptr(&mut self, val: u64)  {
+        self.output.push(PTR.paint(format!("0x{:016x}", val)));
     }
 
     fn handle_string(&mut self, val: &str)  {

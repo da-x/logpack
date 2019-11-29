@@ -1,28 +1,31 @@
-use proc_macro::TokenStream;
-use syn;
-use quote;
+use proc_macro2::{TokenStream as Tokens, Span};
+use syn::{Data, DeriveInput, Fields, DataEnum, Ident};
+use std::collections::HashSet;
 
-// TODO: use the likewise of serde-derive's with_bound so that 'T: Encoder' constraints
-// will not be needed at struct definition.
+pub fn derive(input: &DeriveInput) -> Tokens {
+    let name = &input.ident;
+    let generics = super::add_trait_bounds(
+        input.generics.clone(),
+        &HashSet::new(),
+        &["logpack::Encoder"],
+        &name,
+    );
+    let (_, ty_generics, where_clause) = generics.split_for_impl();
 
-pub fn derive(input: &TokenStream) -> quote::Tokens {
-    let input: String = input.clone().to_string();
-    let ast = syn::parse_macro_input(&input).expect("Couldn't parse item");
-    let name = &ast.ident;
-    let (_, ty_generics, where_clause) = ast.generics.split_for_impl();
-
-    let encoder_fields = match ast.body {
-        syn::Body::Enum(ref variants) => encoder_for_enum(name, &variants, false),
-        syn::Body::Struct(ref variant_data) => encoder_for_struct(&variant_data, false),
+    let encoder_fields = match &input.data {
+        Data::Enum(data) => encoder_for_enum(name, data, false),
+        Data::Struct(variant_data) => encoder_for_struct(&variant_data.fields, false),
+        Data::Union{..} => { panic!() }
     };
 
-    let sizer_fields = match ast.body {
-        syn::Body::Enum(ref variants) => encoder_for_enum(name, &variants, true),
-        syn::Body::Struct(ref variant_data) => encoder_for_struct(&variant_data, true),
+    let sizer_fields = match &input.data {
+        Data::Enum(data) => encoder_for_enum(name, &data, true),
+        Data::Struct(variant_data) => encoder_for_struct(&variant_data.fields, true),
+        Data::Union{..} => { panic!() }
     };
 
     let result = quote! {
-        impl #ty_generics ::logpack::Encoder for #name #ty_generics #where_clause {
+        impl #ty_generics logpack::Encoder for #name #ty_generics #where_clause {
             fn logpack_encode(&self, _buf: &mut ::logpack::buffers::BufEncoder) -> Result<(), (usize, usize)> {
                 #encoder_fields;
                 Ok(())
@@ -36,26 +39,29 @@ pub fn derive(input: &TokenStream) -> quote::Tokens {
     result
 }
 
-fn encoder_for_struct(variant_data: &syn::VariantData, sized: bool) -> quote::Tokens
-{
-    match *variant_data {
-        syn::VariantData::Struct(ref fields) => {
-            encoder_for_struct_kind(Some(&fields), true, sized)
+fn encoder_for_struct(fields: &Fields, sized: bool) -> Tokens {
+    match fields {
+        Fields::Named(ref fields) => {
+            let fields : Vec<_> = fields.named.iter().collect();
+
+            encoder_for_struct_kind(Some(&fields[..]), true, sized)
         },
-        syn::VariantData::Tuple(ref fields) => {
-            encoder_for_struct_kind(Some(&fields), false, sized)
+        Fields::Unnamed(ref fields) => {
+            let fields : Vec<_> = fields.unnamed.iter().collect();
+
+            encoder_for_struct_kind(Some(&fields[..]), false, sized)
         },
-        syn::VariantData::Unit => {
+        Fields::Unit => {
             encoder_for_struct_kind(None, false, sized)
         },
     }
 }
 
-fn encoder_for_enum_struct(name: &syn::Ident, ident: &syn::Ident,
-                           fields: Vec<FieldExt>, prefix: quote::Tokens,
-                           named: bool, sizer: bool, header_size: usize) -> quote::Tokens {
+fn encoder_for_enum_struct<'a>(name: &Ident, ident: &Ident,
+                               fields: Vec<FieldExt<'a>>, prefix: Tokens,
+                               named: bool, sizer: bool, header_size: usize) -> Tokens {
     let one_ref = fields.iter().map(|v| {
-        let ident = &v.match_ident;
+        let ident = &v.get_match_ident();
         quote! { ref #ident }
     });
 
@@ -66,13 +72,13 @@ fn encoder_for_enum_struct(name: &syn::Ident, ident: &syn::Ident,
 
     let body = if sizer {
         let body_impls = fields.iter().map(|v| {
-            let ident = &v.match_ident;
+            let ident = &v.get_match_ident();
             quote! { size += #ident.logpack_sizer(); }
         });
         quote!(let mut size: usize = #header_size; #(#body_impls);*; size )
     } else {
         let body_impls = fields.iter().map(|v| {
-            let ident = &v.match_ident;
+            let ident = &v.get_match_ident();
             quote! { #ident.logpack_encode(_buf)? }
         });
         quote!(#(#body_impls);*; Ok(()) )
@@ -86,7 +92,8 @@ fn encoder_for_enum_struct(name: &syn::Ident, ident: &syn::Ident,
     }
 }
 
-fn encoder_for_enum(name: &syn::Ident, variants: &[syn::Variant], sizer: bool) -> quote::Tokens {
+fn encoder_for_enum(name: &Ident, data_enum: &DataEnum, sizer: bool) -> Tokens {
+    let variants = &data_enum.variants;
     if variants.len() == 0 {
         if sizer {
             quote!(0)
@@ -102,7 +109,8 @@ fn encoder_for_enum(name: &syn::Ident, variants: &[syn::Variant], sizer: bool) -
         } else {
             ("u32", 4)
         };
-        let idx_type = syn::Ident::new(idx_type);
+
+        let idx_type = Ident::new(idx_type, Span::call_site());
         let impls = variants.iter().map(|v| {
             let ident = &v.ident;
             let prefix = if sizer {
@@ -115,20 +123,20 @@ fn encoder_for_enum(name: &syn::Ident, variants: &[syn::Variant], sizer: bool) -
             };
 
             idx += 1;
-            match v.data {
-                syn::VariantData::Struct(ref fields) => {
-                    let fields: Vec<_> = fields.iter().enumerate().map(|(i, f)|
+            match v.fields {
+                Fields::Named(ref fields) => {
+                    let fields: Vec<_> = fields.named.iter().enumerate().map(|(i, f)|
                             FieldExt::new(f, i, true)).collect();
                     encoder_for_enum_struct(name, ident, fields, prefix, true,
                                             sizer, header_size)
                 },
-                syn::VariantData::Tuple(ref fields) => {
-                    let fields: Vec<_> = fields.iter().enumerate().map(|(i, f)|
+                Fields::Unnamed(ref fields) => {
+                    let fields: Vec<_> = fields.unnamed.iter().enumerate().map(|(i, f)|
                             FieldExt::new(f, i, false)).collect();
                     encoder_for_enum_struct(name, ident, fields, prefix, false,
                                             sizer, header_size)
                 },
-                syn::VariantData::Unit => {
+                Fields::Unit => {
                     if sizer {
                         quote! { &#name::#ident => { #header_size } }
                     } else {
@@ -159,8 +167,7 @@ fn encoder_for_enum(name: &syn::Ident, variants: &[syn::Variant], sizer: bool) -
     }
 }
 
-fn encoder_for_struct_kind(fields: Option<&[syn::Field]>, named: bool, sizer: bool) -> quote::Tokens
-{
+fn encoder_for_struct_kind(fields: Option<&[&syn::Field]>, named: bool, sizer: bool) -> Tokens {
     let unit = fields.is_none();
     let fields: Vec<_> = fields.unwrap_or(&[]).iter()
         .enumerate().map(|(i, f)| FieldExt::new(f, i, named)).collect();
@@ -172,11 +179,11 @@ fn encoder_for_struct_kind(fields: Option<&[syn::Field]>, named: bool, sizer: bo
         }
     } else {
         let fields = fields.iter().map(|f| {
-            let f_name = &f.access_ident;
+            let field_expr = &f.access_expr();
             if sizer {
-                quote!(size += self.#f_name.logpack_sizer();)
+                quote!(size += #field_expr.logpack_sizer();)
             } else {
-                quote!(self.#f_name.logpack_encode(_buf)?)
+                quote!(#field_expr.logpack_encode(_buf)?)
             }
         });
         if sizer {
@@ -191,24 +198,32 @@ fn encoder_for_struct_kind(fields: Option<&[syn::Field]>, named: bool, sizer: bo
     }
 }
 
-struct FieldExt {
-    access_ident: syn::Ident,
-    match_ident: syn::Ident,
+struct FieldExt<'a> {
+    field: &'a syn::Field,
+    idx: usize,
+    named: bool,
 }
 
-impl FieldExt {
-    pub fn new(field: &syn::Field, idx: usize, named: bool) -> FieldExt {
-        FieldExt {
-            access_ident: if named {
-                field.ident.clone().unwrap()
-            } else {
-                syn::Ident::new(format!("{}", idx))
-            },
-            match_ident: if named {
-                field.ident.clone().unwrap()
-            } else {
-                syn::Ident::new(format!("f{}", idx))
-            },
+impl<'a> FieldExt<'a> {
+    fn new(field: &'a syn::Field, idx: usize, named: bool) -> FieldExt<'a> {
+        FieldExt { field, idx, named }
+    }
+
+    fn access_expr(&self) -> Tokens {
+        if self.named {
+            let ident = &self.field.ident;
+            quote! { self.#ident }
+        } else {
+            let idx = syn::Index::from(self.idx);
+            quote! { self.#idx }
+        }
+    }
+
+    fn get_match_ident(&self) -> Ident {
+        if self.named {
+            self.field.ident.clone().unwrap()
+        } else {
+            Ident::new(&format!("f{}", self.idx), Span::call_site())
         }
     }
 }

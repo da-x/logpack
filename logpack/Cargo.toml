@@ -7,6 +7,8 @@ authors = ["Dan Aloni <alonid@gmail.com>"]
 serde = "^1.0.27"
 serde_derive = "^1.0.27"
 bytes = "0.*"
+libc = "*"
+cfg-if = "0.1"
 
 [dev-dependencies]
 ron = "*"

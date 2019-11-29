@@ -10,9 +10,11 @@ pub trait Encoder {
 macro_rules! simple {
     ($a:tt) => {
         impl Encoder for $a {
+            #[inline(always)]
             fn logpack_encode(&self, buf: &mut buffers::BufEncoder) -> Result<(), (usize, usize)> {
                 buf.put(self)
             }
+            #[inline(always)]
             fn logpack_sizer(&self) -> usize {
                 size_of::<Self>()
             }
@@ -20,10 +22,12 @@ macro_rules! simple {
     }
 }
 
+simple!(usize);
 simple!(u64);
 simple!(u32);
 simple!(u16);
 simple!(u8);
+simple!(isize);
 simple!(i64);
 simple!(i32);
 simple!(i16);
@@ -31,13 +35,15 @@ simple!(i8);
 simple!(bool);
 
 impl Encoder for () {
+    #[inline(always)]
     fn logpack_encode(&self, _buf: &mut buffers::BufEncoder) -> Result<(), (usize, usize)> {
         Ok(())
     }
+    #[inline(always)]
     fn logpack_sizer(&self) -> usize { 0 }
 }
 
-fn encoded_string_len(value: &str) -> usize
+pub fn encoded_string_len(value: &str) -> usize
 {
     let bytes = value.as_bytes();
     let size = bytes.len();
@@ -50,7 +56,7 @@ fn encoded_string_len(value: &str) -> usize
     panic!("string length {}", size);
 }
 
-fn encode_stored_string(value: &str, buf: &mut buffers::BufEncoder)
+pub fn encode_stored_string(value: &str, buf: &mut buffers::BufEncoder)
     -> Result<(), (usize, usize)>
 {
     let bytes = value.as_bytes();
@@ -78,18 +84,22 @@ fn encode_stored_string(value: &str, buf: &mut buffers::BufEncoder)
 }
 
 impl<'a> Encoder for &'a str {
+    #[inline(always)]
     fn logpack_encode(&self, buf: &mut buffers::BufEncoder) -> Result<(), (usize, usize)> {
         encode_stored_string(self, buf)
     }
+    #[inline(always)]
     fn logpack_sizer(&self) -> usize {
         encoded_string_len(self)
     }
 }
 
 impl Encoder for String {
+    #[inline(always)]
     fn logpack_encode(&self, buf: &mut buffers::BufEncoder) -> Result<(), (usize, usize)> {
         encode_stored_string(self.as_str(), buf)
     }
+    #[inline(always)]
     fn logpack_sizer(&self) -> usize {
         encoded_string_len(self.as_str())
     }
@@ -165,6 +175,7 @@ tuple!((A, 0), (B, 1), (C, 2), (D, 3), (E, 4), (F, 5), (G, 6), (H, 7), (I, 8), (
 impl<T> Encoder for [T]
     where T: Encoder
 {
+    #[inline(always)]
     fn logpack_encode(&self, buf: &mut buffers::BufEncoder) -> Result<(), (usize, usize)> {
         let size : u64 = self.len() as u64;
         size.logpack_encode(buf)?;
@@ -176,6 +187,7 @@ impl<T> Encoder for [T]
         Ok(())
     }
 
+    #[inline(always)]
     fn logpack_sizer(&self) -> usize {
         let mut size = 0;
         for i in 0..size {
@@ -189,18 +201,47 @@ impl<T> Encoder for [T]
 impl<T> Encoder for Box<T>
     where T: Encoder
 {
+    #[inline(always)]
     fn logpack_encode(&self, buf: &mut buffers::BufEncoder) -> Result<(), (usize, usize)> {
         (**self).logpack_encode(buf)
     }
 
+    #[inline(always)]
     fn logpack_sizer(&self) -> usize {
         (**self).logpack_sizer()
+    }
+}
+
+impl<T> Encoder for *mut T
+{
+    #[inline(always)]
+    fn logpack_encode(&self, buf: &mut buffers::BufEncoder) -> Result<(), (usize, usize)> {
+        (*self as u64).logpack_encode(buf)
+    }
+
+    #[inline(always)]
+    fn logpack_sizer(&self) -> usize {
+        (*self as u64).logpack_sizer()
+    }
+}
+
+impl<T> Encoder for *const T
+{
+    #[inline(always)]
+    fn logpack_encode(&self, buf: &mut buffers::BufEncoder) -> Result<(), (usize, usize)> {
+        (*self as u64).logpack_encode(buf)
+    }
+
+    #[inline(always)]
+    fn logpack_sizer(&self) -> usize {
+        (*self as u64).logpack_sizer()
     }
 }
 
 impl<T> Encoder for Option<T>
     where T: Encoder
 {
+    #[inline(always)]
     fn logpack_encode(&self, buf: &mut buffers::BufEncoder) -> Result<(), (usize, usize)> {
         match self {
             &None => {
@@ -212,6 +253,7 @@ impl<T> Encoder for Option<T>
             }
         }
     }
+    #[inline(always)]
     fn logpack_sizer(&self) -> usize {
         match self {
             &None => 1,
@@ -226,6 +268,7 @@ impl<T> Encoder for Option<T>
 impl<T, E> Encoder for Result<T, E>
     where T: Encoder, E: Encoder
 {
+    #[inline(always)]
     fn logpack_encode(&self, buf: &mut buffers::BufEncoder) -> Result<(), (usize, usize)> {
         match self {
             &Ok(ref val) => {
@@ -239,6 +282,7 @@ impl<T, E> Encoder for Result<T, E>
         }
     }
 
+    #[inline(always)]
     fn logpack_sizer(&self) -> usize {
         match self {
             &Ok(ref val) => {
@@ -251,3 +295,55 @@ impl<T, E> Encoder for Result<T, E>
     }
 }
 
+//////////////////////////////////////////////////////////////////////
+
+use std::time::Duration;
+
+impl Encoder for Duration
+{
+    #[inline(always)]
+    fn logpack_encode(&self, buf: &mut buffers::BufEncoder) -> Result<(), (usize, usize)> {
+        let secs: u64 = self.as_secs();
+        secs.logpack_encode(buf)?;
+        let nanos: u32 = self.subsec_nanos();
+        nanos.logpack_encode(buf)?;
+        Ok(())
+    }
+
+    #[inline(always)]
+    fn logpack_sizer(&self) -> usize {
+        let secs: u64 = 0;
+        let nanos: u32 = 0;
+        secs.logpack_sizer() + nanos.logpack_sizer()
+    }
+}
+
+cfg_if! {
+    if #[cfg(unix)] {
+        use std::time::Instant;
+
+        #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+        impl Encoder for Instant
+        {
+            #[inline(always)]
+            fn logpack_encode(&self, buf: &mut buffers::BufEncoder) -> Result<(), (usize, usize)> {
+                use libc::timespec;
+                let timespec = unsafe {
+                    ::std::mem::transmute::<_, &timespec>(&self)
+                };
+                let secs: u64 = timespec.tv_sec as u64;
+                secs.logpack_encode(buf)?;
+                let nanos: u32 = timespec.tv_nsec as u32;
+                nanos.logpack_encode(buf)?;
+                Ok(())
+            }
+
+            #[inline(always)]
+            fn logpack_sizer(&self) -> usize {
+                let secs: u64 = 0;
+                let nanos: u32 = 0;
+                secs.logpack_sizer() + nanos.logpack_sizer()
+            }
+        }
+    }
+}

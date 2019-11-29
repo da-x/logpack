@@ -7,7 +7,9 @@ use buffers::BufDecoder;
 
 pub type TypeName = String;
 pub type TypeNameId = (TypeName, u16);
+pub type ResolvedDesc = Description<TypeNameId>;
 
+#[derive(Clone)]
 pub struct NameMap {
     map: HashMap<TypeNameId, Named<TypeNameId>>
 }
@@ -26,7 +28,11 @@ impl NameMap {
         }
     }
 
-    pub fn feed(&mut self, description: Description<TypeNameId>) -> FeedResult<Description<TypeNameId>>
+    pub fn get_map(&self) -> &HashMap<TypeNameId, Named<TypeNameId>> {
+        &self.map
+    }
+
+    pub fn feed(&mut self, description: ResolvedDesc) -> FeedResult<ResolvedDesc>
     {
         use Description::*;
 
@@ -51,6 +57,7 @@ impl NameMap {
             q@Unit => q,
             q@PhantomData => q,
             q@Bool => q,
+            q@RawPtr => q,
             q@String => q,
 
             q@ByName(_, None) => q,
@@ -96,6 +103,7 @@ impl NameMap {
     }
 }
 
+#[derive(Clone)]
 pub struct Decoder<'a, 'b>
 {
     types: &'a NameMap,
@@ -117,6 +125,7 @@ pub trait Callbacks {
     fn handle_string(&mut self, &str);
     fn handle_unit(&mut self);
     fn handle_phantom(&mut self);
+    fn handle_raw_ptr(&mut self, u64);
 
     fn begin_enum(&mut self, typename_id: &TypeNameId, option_name: &String) -> &mut Self::SubType;
     fn end_enum(&mut self, typename_id: &TypeNameId);
@@ -185,7 +194,13 @@ impl<'a, 'b> Decoder<'a, 'b> {
         Self { types, buffer }
     }
 
-    pub fn decode<C>(&mut self, desc: &Description<TypeNameId>, callbacks: &mut C) -> Result<(), Error>
+    pub fn into_decoder(self) -> BufDecoder<'b> {
+        let Self { buffer, .. } = self;
+
+        buffer
+    }
+
+    pub fn decode<C>(&mut self, desc: &ResolvedDesc, callbacks: &mut C) -> Result<(), Error>
         where C: Callbacks
     {
         use Description::*;
@@ -199,6 +214,7 @@ impl<'a, 'b> Decoder<'a, 'b> {
             &I32 => simple!(self, callbacks, handle_i32),
             &I64 => simple!(self, callbacks, handle_i64),
             &Bool => simple!(self, callbacks, handle_bool),
+            &RawPtr => simple!(self, callbacks, handle_raw_ptr),
             &Unit => { callbacks.handle_unit(); Ok(()) }
             &PhantomData => { callbacks.handle_phantom(); Ok(()) }
             &ByName(ref typename_id, None) => {
@@ -227,7 +243,7 @@ impl<'a, 'b> Decoder<'a, 'b> {
         self.decode_by_name_direct(typename_id, named, callbacks)
     }
 
-    fn decode_array<C>(&mut self, size: usize, sub: &Box<Description<TypeNameId>>, callbacks: &mut C) -> Result<(), Error>
+    fn decode_array<C>(&mut self, size: usize, sub: &Box<ResolvedDesc>, callbacks: &mut C) -> Result<(), Error>
         where C: Callbacks
     {
         let ctx = callbacks.begin_array(size);
@@ -242,7 +258,7 @@ impl<'a, 'b> Decoder<'a, 'b> {
         Ok(())
     }
 
-    fn decode_slice<C>(&mut self, sub: &Box<Description<TypeNameId>>, callbacks: &mut C) -> Result<(), Error>
+    fn decode_slice<C>(&mut self, sub: &Box<ResolvedDesc>, callbacks: &mut C) -> Result<(), Error>
         where C: Callbacks
     {
         let size = self.buffer.get::<u64>().map_err(Error::GetError)? as usize;
@@ -258,7 +274,7 @@ impl<'a, 'b> Decoder<'a, 'b> {
         Ok(())
     }
 
-    fn decode_tuple<C>(&mut self, subs: &Vec<Description<TypeNameId>>, callbacks: &mut C) -> Result<(), Error>
+    fn decode_tuple<C>(&mut self, subs: &Vec<ResolvedDesc>, callbacks: &mut C) -> Result<(), Error>
         where C: Callbacks
     {
         let ctx = callbacks.begin_tuple(subs.len());
@@ -273,7 +289,7 @@ impl<'a, 'b> Decoder<'a, 'b> {
         Ok(())
     }
 
-    fn decode_option<C>(&mut self, desc: &Description<TypeNameId>, callbacks: &mut C) -> Result<(), Error>
+    fn decode_option<C>(&mut self, desc: &ResolvedDesc, callbacks: &mut C) -> Result<(), Error>
         where C: Callbacks
     {
         let f0 = self.buffer.get::<u8>().map_err(Error::GetError)?;
@@ -291,7 +307,7 @@ impl<'a, 'b> Decoder<'a, 'b> {
         Ok(())
     }
 
-    fn decode_result<C>(&mut self, desc: &Description<TypeNameId>, desc2: &Description<TypeNameId>, callbacks: &mut C) -> Result<(), Error>
+    fn decode_result<C>(&mut self, desc: &ResolvedDesc, desc2: &ResolvedDesc, callbacks: &mut C) -> Result<(), Error>
         where C: Callbacks
     {
         let f0 = self.buffer.get::<u8>().map_err(Error::GetError)?;

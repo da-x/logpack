@@ -1,5 +1,8 @@
 #[macro_use]
 extern crate serde_derive;
+extern crate libc;
+#[macro_use]
+extern crate cfg_if;
 
 pub mod decoder;
 pub mod encoder;
@@ -10,6 +13,7 @@ pub use decoder::Decoder;
 pub use decoder::NameMap;
 pub use buffers::BufEncoder;
 pub use buffers::BufDecoder;
+pub use decoder::ResolvedDesc;
 
 use std::collections::HashMap;
 use std::marker::PhantomData;
@@ -19,20 +23,20 @@ use std::any::TypeId;
 //
 // Type description
 
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 pub enum Struct<T, S=String> {
     Unit,
     Tuple(Vec<Description<T, S>>),
     Named(Vec<(S, Description<T, S>)>),
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 pub enum Named<T, S=String> {
     Enum(Vec<(S, Struct<T, S>)>),
     Struct(Struct<T, S>),
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 pub enum Description<T, S=String> {
     U64,
     U32,
@@ -46,6 +50,7 @@ pub enum Description<T, S=String> {
     PhantomData,
     Bool,
     String,
+    RawPtr,
 
     Option(Box<Description<T, S>>),
     Result(Box<Description<T, S>>, Box<Description<T, S>>),
@@ -101,9 +106,11 @@ impl SeenTypes {
 //
 // LogpackType and impl
 
+pub type RefDesc = Description<TypeNameId, FieldName>;
+
 pub trait LogpackType {
-    fn logpack_describe(seen: &mut SeenTypes) -> Description<TypeNameId, FieldName>;
-    fn logpack_describe_by_value(&self, seen: &mut SeenTypes) -> Description<TypeNameId, FieldName> {
+    fn logpack_describe(seen: &mut SeenTypes) -> RefDesc;
+    fn logpack_describe_by_value(&self, seen: &mut SeenTypes) -> RefDesc {
         Self::logpack_describe(seen)
     }
 }
@@ -111,17 +118,19 @@ pub trait LogpackType {
 macro_rules! simple {
     ($a:tt, $b:ident) => {
         impl LogpackType for $a {
-            fn logpack_describe(_: &mut SeenTypes) -> Description<TypeNameId, FieldName> {
+            fn logpack_describe(_: &mut SeenTypes) -> RefDesc {
                 Description::$b
             }
         }
     }
 }
 
+simple!(usize, U64);
 simple!(u64, U64);
 simple!(u32, U32);
 simple!(u16, U16);
 simple!(u8, U8);
+simple!(isize, I64);
 simple!(i64, I64);
 simple!(i32, I32);
 simple!(i16, I16);
@@ -134,7 +143,7 @@ simple!(String, String);
 impl<T> LogpackType for Option<T>
     where T: LogpackType
 {
-    fn logpack_describe(seen: &mut SeenTypes) -> Description<TypeNameId, FieldName>{
+    fn logpack_describe(seen: &mut SeenTypes) -> RefDesc{
         Description::Option(Box::new(T::logpack_describe(seen)))
     }
 }
@@ -142,7 +151,7 @@ impl<T> LogpackType for Option<T>
 impl<T, S> LogpackType for Result<T, S>
     where T: LogpackType, S: LogpackType
 {
-    fn logpack_describe(seen: &mut SeenTypes) -> Description<TypeNameId, FieldName> {
+    fn logpack_describe(seen: &mut SeenTypes) -> RefDesc {
         Description::Result(Box::new(T::logpack_describe(seen)),
                             Box::new(S::logpack_describe(seen)))
     }
@@ -151,13 +160,13 @@ impl<T, S> LogpackType for Result<T, S>
 impl<T> LogpackType for PhantomData<T>
     where T: LogpackType
 {
-    fn logpack_describe(_: &mut SeenTypes) -> Description<TypeNameId, FieldName> {
+    fn logpack_describe(_: &mut SeenTypes) -> RefDesc {
         Description::PhantomData
     }
 }
 
 impl<T> LogpackType for [T; 0] {
-    fn logpack_describe(_: &mut SeenTypes) -> Description<TypeNameId, FieldName> {
+    fn logpack_describe(_: &mut SeenTypes) -> RefDesc {
         Description::Unit
     }
 }
@@ -168,7 +177,7 @@ macro_rules! array_impls {
             impl<T> LogpackType for [T; $len]
                 where T: LogpackType,
             {
-                fn logpack_describe(seen: &mut SeenTypes) -> Description<TypeNameId, FieldName> {
+                fn logpack_describe(seen: &mut SeenTypes) -> RefDesc {
                     Description::Array($len, Box::new(T::logpack_describe(seen)))
                 }
             }
@@ -186,7 +195,7 @@ macro_rules! tuple {
         impl<$($type),*> LogpackType for ($($type),*)
             where $($type : LogpackType),*
         {
-            fn logpack_describe(seen: &mut SeenTypes) -> Description<TypeNameId, FieldName> {
+            fn logpack_describe(seen: &mut SeenTypes) -> RefDesc {
                 Description::Tuple(vec![
                     $($type::logpack_describe(seen)),*
             ]) }
@@ -213,7 +222,7 @@ tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, R, P);
 
 impl<T> LogpackType for [T] where T: LogpackType
 {
-    fn logpack_describe(seen: &mut SeenTypes) -> Description<TypeNameId, FieldName> {
+    fn logpack_describe(seen: &mut SeenTypes) -> RefDesc {
         Description::Slice(Box::new(T::logpack_describe(seen)))
     }
 }
@@ -222,7 +231,7 @@ macro_rules! deref_impl {
     ($($desc:tt)+) => {
         impl $($desc)+ {
             #[inline]
-            fn logpack_describe(seen: &mut SeenTypes) -> Description<TypeNameId, FieldName> {
+            fn logpack_describe(seen: &mut SeenTypes) -> RefDesc {
                 T::logpack_describe(seen)
             }
         }
@@ -234,7 +243,7 @@ deref_impl!(<'a, T: ?Sized> LogpackType for &'a mut T where T: LogpackType);
 
 impl<T> LogpackType for Box<T> where T: LogpackType
 {
-    fn logpack_describe(seen: &mut SeenTypes) -> Description<TypeNameId, FieldName> {
+    fn logpack_describe(seen: &mut SeenTypes) -> RefDesc {
         T::logpack_describe(seen)
     }
 }
@@ -243,7 +252,50 @@ pub struct LogpackTypeWrapper<T>(T);
 
 impl<T> LogpackType for LogpackTypeWrapper<T> where T: LogpackType
 {
-    fn logpack_describe(seen: &mut SeenTypes) -> Description<TypeNameId, FieldName> {
+    fn logpack_describe(seen: &mut SeenTypes) -> RefDesc {
         T::logpack_describe(seen)
     }
 }
+
+impl<T> LogpackType for *const T
+{
+    fn logpack_describe(_seen: &mut SeenTypes) -> RefDesc{
+        Description::RawPtr
+    }
+}
+
+impl<T> LogpackType for *mut T
+{
+    fn logpack_describe(_seen: &mut SeenTypes) -> RefDesc{
+        Description::RawPtr
+    }
+}
+
+//////////////////////////////////////////////////////////////////////////
+
+macro_rules! std_type_to_tuple {
+    ($name:ident: $($fields:ident),+) => {
+        impl LogpackType for $name
+        {
+            fn logpack_describe(seen: &mut SeenTypes) -> RefDesc {
+                let (first_seen, typename_id) = seen.make_name_for_id(stringify!($name),
+                                                                      TypeId::of::<Self>());
+                let may_recurse = if first_seen {
+                    Some(Named::Struct(Struct::Tuple(vec![
+                        $( $fields::logpack_describe(seen) ),*
+                    ])))
+                } else {
+                    None
+                };
+
+                Description::ByName(typename_id, may_recurse)
+            }
+        }
+    };
+}
+
+use std::time::Duration;
+use std::time::Instant;
+
+std_type_to_tuple!(Duration: u64, u32);
+std_type_to_tuple!(Instant: u64, u32);

@@ -10,16 +10,19 @@ pub struct BufEncoder<'a> {
 }
 
 impl<'a> BufEncoder<'a> {
+    #[inline(always)]
     pub fn new(slice: &'a mut [u8]) -> Self {
         Self { slice: slice, position: 0 }
     }
 }
 
 impl<'a> BufEncoder<'a> {
+    #[inline(always)]
     pub fn len(&self) -> usize {
         self.slice.len()
     }
 
+    #[inline(always)]
     pub fn remaining(&self) -> usize {
         self.slice.len() - self.position
     }
@@ -28,6 +31,7 @@ impl<'a> BufEncoder<'a> {
         &self.slice[0 .. self.position]
     }
 
+    #[inline(always)]
     pub unsafe fn reserve_space<T: Sized + Copy>(&mut self) -> Result<(*mut T), (usize, usize)>
         where T: Sized + Copy
     {
@@ -43,6 +47,7 @@ impl<'a> BufEncoder<'a> {
         Ok((&mut self.slice[position] as *mut u8) as *mut T)
     }
 
+    #[inline(always)]
     pub unsafe fn reserve_space_by_size(&mut self, size: usize) -> Result<*mut u8, (usize, usize)>
     {
         let remaining = self.remaining();
@@ -56,6 +61,7 @@ impl<'a> BufEncoder<'a> {
         Ok(&mut self.slice[position] as *mut u8)
     }
 
+    #[inline(always)]
     pub fn put<T>(&mut self, item: &T) -> Result<(), (usize, usize)>
         where T: Sized + Copy
     {
@@ -68,11 +74,29 @@ impl<'a> BufEncoder<'a> {
         let dest = &mut self.slice[self.position];
 
         unsafe {
-            ::std::ptr::write((dest as *mut u8) as *mut T, item.clone());
+            ::std::ptr::write_unaligned((dest as *mut u8) as *mut T, item.clone());
         }
 
         self.position += size;
         Ok(())
+    }
+
+    pub fn append_bytes(&mut self, slice: &[u8]) -> Result<(), (usize, usize)> {
+        let size = slice.len();
+        let remaining = self.remaining();
+        if remaining < size {
+            return Err((remaining, size));
+        }
+
+        let dest = &mut self.slice[self.position];
+
+        unsafe {
+            ::std::ptr::copy(&slice[0], dest as *mut u8, size);
+        }
+
+        self.position += size;
+        Ok(())
+
     }
 }
 
@@ -80,6 +104,7 @@ impl<'a> BufEncoder<'a> {
 // BufDecoder
 //
 
+#[derive(Clone)]
 pub struct BufDecoder<'a> {
     slice: &'a [u8],
     position: usize,
@@ -110,6 +135,12 @@ impl<'a> BufDecoder<'a> {
         let value = &self.slice[self.position .. self.position + size];
         self.position += size;
         Ok(value)
+    }
+
+    pub fn get_remaining_slice(&mut self) -> Result<&[u8], (usize, usize)>
+    {
+        let remaining = self.remaining();
+        self.get_slice(remaining)
     }
 
     pub fn get<T>(&mut self) -> Result<T, (usize, usize)>

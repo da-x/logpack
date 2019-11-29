@@ -4,10 +4,11 @@ version = "0.1.0"
 authors = ["Dan Aloni <alonid@gmail.com>"]
 
 [dependencies]
-logpack = { path = "../logpack" }
-logpack-derive = { path = "../logpack-derive" }
-logpack-ron = { path = "../logpack-ron" }
+logpack = "*"
+logpack-derive = "*"
+logpack-ron = "*"
 ron = "*"
+hexdump = "*"
 ansi_term = "*"
 serde = "1.*"
 serde_derive = "1.*"

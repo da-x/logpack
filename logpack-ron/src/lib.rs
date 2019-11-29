@@ -3,6 +3,7 @@ extern crate ansi_term;
 
 use logpack::decoder::Callbacks;
 use logpack::decoder::TypeNameId;
+use std::fmt::Write;
 
 pub mod ansi;
 
@@ -26,43 +27,47 @@ impl<'a> Callbacks for Repr<'a> {
     type SubType = Repr<'a>;
 
     fn handle_u8(&mut self, val: u8) {
-        *self.output += &val.to_string();
+        write!(self.output, "{}", val).unwrap();
     }
 
     fn handle_u16(&mut self, val: u16) {
-        *self.output += &val.to_string();
+        write!(self.output, "{}", val).unwrap();
     }
 
     fn handle_u32(&mut self, val: u32)  {
-        *self.output += &val.to_string();
+        write!(self.output, "{}", val).unwrap();
     }
 
     fn handle_u64(&mut self, val: u64)  {
-        *self.output += &val.to_string();
+        write!(self.output, "{}", val).unwrap();
+    }
+
+    fn handle_raw_ptr(&mut self, val: u64)  {
+        write!(self.output, "0x{:016x}", val).unwrap();
     }
 
     fn handle_i8(&mut self, val: i32)  {
-        *self.output += &val.to_string();
+        write!(self.output, "{}", val).unwrap();
     }
 
     fn handle_i16(&mut self, val: i32)  {
-        *self.output += &val.to_string();
+        write!(self.output, "{}", val).unwrap();
     }
 
     fn handle_i32(&mut self, val: i32)  {
-        *self.output += &val.to_string();
+        write!(self.output, "{}", val).unwrap();
     }
 
     fn handle_i64(&mut self, val: i64)   {
-        *self.output += &val.to_string();
+        write!(self.output, "{}", val).unwrap();
     }
 
     fn handle_bool(&mut self, val: bool)  {
-        *self.output += &val.to_string();
+        write!(self.output, "{}", val).unwrap();
     }
 
     fn handle_string(&mut self, val: &str)  {
-        *self.output += &format!("{:?}", val);
+        write!(self.output, "{:?}", val).unwrap();
     }
 
     fn handle_unit(&mut self)  {
