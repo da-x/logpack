@@ -1,19 +1,10 @@
-#[macro_use]
-extern crate logpack_derive;
-#[macro_use]
-extern crate serde_derive;
-
-extern crate logpack;
-extern crate ron;
-extern crate logpack_ron;
-extern crate serde;
-extern crate ansi_term;
-extern crate hexdump;
+use logpack_derive::Logpack;
+use serde_derive::Deserialize;
 
 use hexdump::HexReader;
 use ansi_term::{ANSIString, ANSIStrings};
-use self::ron::ser::{to_string};
-use self::ron::de::{from_str};
+use ron::ser::{to_string};
+use ron::de::{from_str};
 use std::fmt::Debug;
 use std::io::BufRead;
 

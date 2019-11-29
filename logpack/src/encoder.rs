@@ -1,5 +1,5 @@
 use std::mem::size_of;
-
+use cfg_if::cfg_if;
 use super::buffers;
 
 pub trait Encoder {

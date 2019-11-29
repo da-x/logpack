@@ -1,6 +1,8 @@
+use std::collections::HashSet;
+
 use proc_macro2::{TokenStream as Tokens};
 use syn::{Data, DeriveInput, Fields, DataEnum};
-use std::collections::HashSet;
+use quote::quote;
 
 pub fn derive(input: &DeriveInput) -> Tokens {
     let name = &input.ident;

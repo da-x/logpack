@@ -1,8 +1,4 @@
-#[macro_use]
-extern crate serde_derive;
-extern crate libc;
-#[macro_use]
-extern crate cfg_if;
+use serde_derive::{Serialize, Deserialize};
 
 pub mod decoder;
 pub mod encoder;

@@ -3,22 +3,17 @@
 #![crate_type = "proc-macro"]
 #![recursion_limit = "250"]
 
-extern crate proc_macro2;
 extern crate proc_macro;
-extern crate syn;
-
-#[macro_use]
-extern crate quote;
 
 mod type_derive;
 mod encode_derive;
 use std::process::Command;
+use std::collections::HashSet;
 
 use proc_macro::TokenStream;
-use proc_macro2::{Span};
+use proc_macro2::{Span, TokenStream as Tokens};
 use syn::{DeriveInput, GenericParam, Generics, Ident};
-use std::collections::HashSet;
-use proc_macro2::TokenStream as Tokens;
+use quote::quote;
 
 #[proc_macro_derive(Logpack, attributes(Logpack))]
 pub fn derive(input: TokenStream) -> TokenStream {

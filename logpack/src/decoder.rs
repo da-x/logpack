@@ -3,7 +3,7 @@ use super::Named;
 use super::Struct;
 
 use std::collections::{HashMap};
-use buffers::BufDecoder;
+use super::buffers::BufDecoder;
 
 pub type TypeName = String;
 pub type TypeNameId = (TypeName, u16);
@@ -113,19 +113,19 @@ pub struct Decoder<'a, 'b>
 pub trait Callbacks {
     type SubType : Callbacks;
 
-    fn handle_u8(&mut self, u8);
-    fn handle_u16(&mut self, u16);
-    fn handle_u32(&mut self, u32);
-    fn handle_u64(&mut self, u64);
-    fn handle_i8(&mut self, i32);
-    fn handle_i16(&mut self, i32);
-    fn handle_i32(&mut self, i32);
-    fn handle_i64(&mut self, i64);
-    fn handle_bool(&mut self, bool);
-    fn handle_string(&mut self, &str);
+    fn handle_u8(&mut self, _: u8);
+    fn handle_u16(&mut self, _: u16);
+    fn handle_u32(&mut self, _: u32);
+    fn handle_u64(&mut self, _: u64);
+    fn handle_i8(&mut self, _: i32);
+    fn handle_i16(&mut self, _: i32);
+    fn handle_i32(&mut self, _: i32);
+    fn handle_i64(&mut self, _: i64);
+    fn handle_bool(&mut self, _: bool);
+    fn handle_string(&mut self, _: &str);
     fn handle_unit(&mut self);
     fn handle_phantom(&mut self);
-    fn handle_raw_ptr(&mut self, u64);
+    fn handle_raw_ptr(&mut self, _: u64);
 
     fn begin_enum(&mut self, typename_id: &TypeNameId, option_name: &String) -> &mut Self::SubType;
     fn end_enum(&mut self, typename_id: &TypeNameId);

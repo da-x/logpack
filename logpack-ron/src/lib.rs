@@ -1,6 +1,3 @@
-extern crate logpack;
-extern crate ansi_term;
-
 use logpack::decoder::Callbacks;
 use logpack::decoder::TypeNameId;
 use std::fmt::Write;
