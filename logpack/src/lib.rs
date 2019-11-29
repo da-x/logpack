@@ -104,11 +104,11 @@ impl SeenTypes {
 
 //////////////////////////////////////////////////////////////////////////
 //
-// LogpackType and impl
+// Logpack and impl
 
 pub type RefDesc = Description<TypeNameId, FieldName>;
 
-pub trait LogpackType {
+pub trait Logpack {
     fn logpack_describe(seen: &mut SeenTypes) -> RefDesc;
     fn logpack_describe_by_value(&self, seen: &mut SeenTypes) -> RefDesc {
         Self::logpack_describe(seen)
@@ -117,7 +117,7 @@ pub trait LogpackType {
 
 macro_rules! simple {
     ($a:tt, $b:ident) => {
-        impl LogpackType for $a {
+        impl Logpack for $a {
             fn logpack_describe(_: &mut SeenTypes) -> RefDesc {
                 Description::$b
             }
@@ -140,16 +140,16 @@ simple!(bool, Bool);
 simple!(str, String);
 simple!(String, String);
 
-impl<T> LogpackType for Option<T>
-    where T: LogpackType
+impl<T> Logpack for Option<T>
+    where T: Logpack
 {
     fn logpack_describe(seen: &mut SeenTypes) -> RefDesc{
         Description::Option(Box::new(T::logpack_describe(seen)))
     }
 }
 
-impl<T, S> LogpackType for Result<T, S>
-    where T: LogpackType, S: LogpackType
+impl<T, S> Logpack for Result<T, S>
+    where T: Logpack, S: Logpack
 {
     fn logpack_describe(seen: &mut SeenTypes) -> RefDesc {
         Description::Result(Box::new(T::logpack_describe(seen)),
@@ -157,15 +157,15 @@ impl<T, S> LogpackType for Result<T, S>
     }
 }
 
-impl<T> LogpackType for PhantomData<T>
-    where T: LogpackType
+impl<T> Logpack for PhantomData<T>
+    where T: Logpack
 {
     fn logpack_describe(_: &mut SeenTypes) -> RefDesc {
         Description::PhantomData
     }
 }
 
-impl<T> LogpackType for [T; 0] {
+impl<T> Logpack for [T; 0] {
     fn logpack_describe(_: &mut SeenTypes) -> RefDesc {
         Description::Unit
     }
@@ -174,8 +174,8 @@ impl<T> LogpackType for [T; 0] {
 macro_rules! array_impls {
     ($($len:tt)+) => {
         $(
-            impl<T> LogpackType for [T; $len]
-                where T: LogpackType,
+            impl<T> Logpack for [T; $len]
+                where T: Logpack,
             {
                 fn logpack_describe(seen: &mut SeenTypes) -> RefDesc {
                     Description::Array($len, Box::new(T::logpack_describe(seen)))
@@ -192,8 +192,8 @@ array_impls!(01 02 03 04 05 06 07 08 09 10
 
 macro_rules! tuple {
     ($($type:ident),*) => {
-        impl<$($type),*> LogpackType for ($($type),*)
-            where $($type : LogpackType),*
+        impl<$($type),*> Logpack for ($($type),*)
+            where $($type : Logpack),*
         {
             fn logpack_describe(seen: &mut SeenTypes) -> RefDesc {
                 Description::Tuple(vec![
@@ -220,7 +220,7 @@ tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O);
 tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, R);
 tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, R, P);
 
-impl<T> LogpackType for [T] where T: LogpackType
+impl<T> Logpack for [T] where T: Logpack
 {
     fn logpack_describe(seen: &mut SeenTypes) -> RefDesc {
         Description::Slice(Box::new(T::logpack_describe(seen)))
@@ -238,33 +238,33 @@ macro_rules! deref_impl {
     };
 }
 
-deref_impl!(<'a, T: ?Sized> LogpackType for &'a T where T: LogpackType);
-deref_impl!(<'a, T: ?Sized> LogpackType for &'a mut T where T: LogpackType);
+deref_impl!(<'a, T: ?Sized> Logpack for &'a T where T: Logpack);
+deref_impl!(<'a, T: ?Sized> Logpack for &'a mut T where T: Logpack);
 
-impl<T> LogpackType for Box<T> where T: LogpackType
+impl<T> Logpack for Box<T> where T: Logpack
 {
     fn logpack_describe(seen: &mut SeenTypes) -> RefDesc {
         T::logpack_describe(seen)
     }
 }
 
-pub struct LogpackTypeWrapper<T>(T);
+pub struct LogpackWrapper<T>(T);
 
-impl<T> LogpackType for LogpackTypeWrapper<T> where T: LogpackType
+impl<T> Logpack for LogpackWrapper<T> where T: Logpack
 {
     fn logpack_describe(seen: &mut SeenTypes) -> RefDesc {
         T::logpack_describe(seen)
     }
 }
 
-impl<T> LogpackType for *const T
+impl<T> Logpack for *const T
 {
     fn logpack_describe(_seen: &mut SeenTypes) -> RefDesc{
         Description::RawPtr
     }
 }
 
-impl<T> LogpackType for *mut T
+impl<T> Logpack for *mut T
 {
     fn logpack_describe(_seen: &mut SeenTypes) -> RefDesc{
         Description::RawPtr
@@ -275,7 +275,7 @@ impl<T> LogpackType for *mut T
 
 macro_rules! std_type_to_tuple {
     ($name:ident: $($fields:ident),+) => {
-        impl LogpackType for $name
+        impl Logpack for $name
         {
             fn logpack_describe(seen: &mut SeenTypes) -> RefDesc {
                 let (first_seen, typename_id) = seen.make_name_for_id(stringify!($name),

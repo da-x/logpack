@@ -1,4 +1,4 @@
-//!# A custom derive implementation for `#[derive(LogpackType)]`
+//!# A custom derive implementation for `#[derive(Logpack)]`
 
 #![crate_type = "proc-macro"]
 #![recursion_limit = "250"]
@@ -20,7 +20,7 @@ use syn::{DeriveInput, GenericParam, Generics, Ident};
 use std::collections::HashSet;
 use proc_macro2::TokenStream as Tokens;
 
-#[proc_macro_derive(LogpackType, attributes(LogpackType))]
+#[proc_macro_derive(Logpack, attributes(Logpack))]
 pub fn derive(input: TokenStream) -> TokenStream {
     let input: DeriveInput = syn::parse(input).unwrap();
     let name = &input.ident;

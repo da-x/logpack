@@ -17,7 +17,7 @@ use self::ron::de::{from_str};
 use std::fmt::Debug;
 use std::io::BufRead;
 
-#[derive(LogpackType, Debug, Eq, PartialEq, Deserialize)]
+#[derive(Logpack, Debug, Eq, PartialEq, Deserialize)]
 pub enum SimpleEnum {
     WithUnit,
     TupleField(u32),
@@ -27,26 +27,26 @@ pub enum SimpleEnum {
     OtherUnit(SimpleStructUnit),
 }
 
-#[derive(LogpackType, Debug, Eq, PartialEq, Deserialize)]
+#[derive(Logpack, Debug, Eq, PartialEq, Deserialize)]
 pub struct SimpleStructNamed {
     some_str: String,
 }
 
-#[derive(LogpackType, Debug, Eq, PartialEq, Deserialize)]
+#[derive(Logpack, Debug, Eq, PartialEq, Deserialize)]
 pub struct SimpleStructTuple(u32, String);
 
-#[derive(LogpackType, Debug, Eq, PartialEq, Deserialize)]
+#[derive(Logpack, Debug, Eq, PartialEq, Deserialize)]
 pub struct SimpleStructUnit;
 
 fn test<E>(st: &mut logpack::SeenTypes,
            tm: &mut logpack::NameMap,
            e: &E)
-    where E: logpack::LogpackType + logpack::Encoder +
+    where E: logpack::Logpack + logpack::Encoder +
              serde::de::DeserializeOwned + Eq + PartialEq + Debug
 {
     use logpack::*;
 
-    let type_desc = LogpackType::logpack_describe_by_value(e, st);
+    let type_desc = Logpack::logpack_describe_by_value(e, st);
     let type_ser = to_string(&type_desc).expect("Serialization failed");
     let mut bytes : [u8; 1024] = [0; 1024];
     let mut enc_buf = logpack::BufEncoder::new(&mut bytes);
@@ -100,11 +100,11 @@ fn test<E>(st: &mut logpack::SeenTypes,
 fn test_ser_only<E>(st: &mut logpack::SeenTypes,
                     tm: &mut logpack::NameMap,
                     e: &E)
-    where E: logpack::LogpackType + logpack::Encoder + Debug
+    where E: logpack::Logpack + logpack::Encoder + Debug
 {
     use logpack::*;
 
-    let type_desc = LogpackType::logpack_describe_by_value(e, st);
+    let type_desc = Logpack::logpack_describe_by_value(e, st);
     let type_ser = to_string(&type_desc).expect("Serialization failed");
     let mut bytes : [u8; 1024] = [0; 1024];
     let mut enc_buf = logpack::BufEncoder::new(&mut bytes);
@@ -152,7 +152,7 @@ fn test_ser_only<E>(st: &mut logpack::SeenTypes,
     assert_eq!(encoded.len(), sizer_result);
 }
 
-#[derive(LogpackType, Debug)]
+#[derive(Logpack, Debug)]
 pub struct StaticRecord {
     pub file: &'static str,
     pub line: u32,

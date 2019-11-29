@@ -7,7 +7,7 @@ pub fn derive(input: &DeriveInput) -> Tokens {
     let generics = super::add_trait_bounds(
         input.generics.clone(),
         &HashSet::new(),
-        &["logpack::LogpackType"],
+        &["logpack::Logpack"],
         &name,
     );
     let (_, ty_generics, where_clause) = generics.split_for_impl();
@@ -27,7 +27,7 @@ pub fn derive(input: &DeriveInput) -> Tokens {
     };
 
      let result = quote! {
-         impl #ty_generics logpack::LogpackType for #name #ty_generics #where_clause {
+         impl #ty_generics logpack::Logpack for #name #ty_generics #where_clause {
              fn logpack_describe(st: &mut logpack::SeenTypes) ->
                  logpack::Description<logpack::TypeNameId, logpack::FieldName>
              {
@@ -51,14 +51,14 @@ fn bintype_for_struct(fields: &Fields) -> Tokens {
                 let f_name = &f.ident;
                 let ty = &f.ty;
                 quote!((stringify!(#f_name),
-                        logpack::LogpackTypeWrapper::<#ty>::logpack_describe(st)))
+                        logpack::LogpackWrapper::<#ty>::logpack_describe(st)))
             }).collect();
             quote![ logpack::Struct::Named(vec![ #(#fields),* ]) ]
         },
         Fields::Unnamed(ref fields) => {
             let fields : Vec<_> = fields.unnamed.iter().map(|f| {
                 let ty = &f.ty;
-                quote!(logpack::LogpackTypeWrapper::<#ty>::logpack_describe(st))
+                quote!(logpack::LogpackWrapper::<#ty>::logpack_describe(st))
             }).collect();
             quote![ logpack::Struct::Tuple(vec![ #(#fields),* ]) ]
         },
