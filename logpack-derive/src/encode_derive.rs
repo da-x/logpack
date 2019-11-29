@@ -9,10 +9,9 @@ pub fn derive(input: &DeriveInput) -> Tokens {
     let generics = super::add_trait_bounds(
         input.generics.clone(),
         &HashSet::new(),
-        &["logpack::Encoder"],
-        &name,
+        &[quote!{ logpack::Encoder }],
     );
-    let (_, ty_generics, where_clause) = generics.split_for_impl();
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
     let encoder_fields = match &input.data {
         Data::Enum(data) => encoder_for_enum(name, data, false),
@@ -27,8 +26,8 @@ pub fn derive(input: &DeriveInput) -> Tokens {
     };
 
     let result = quote! {
-        impl #ty_generics logpack::Encoder for #name #ty_generics #where_clause {
-            fn logpack_encode(&self, _buf: &mut ::logpack::buffers::BufEncoder) -> Result<(), (usize, usize)> {
+        impl #impl_generics logpack::Encoder for #name #ty_generics #where_clause {
+            fn logpack_encode(&self, _buf: &mut logpack::buffers::BufEncoder) -> Result<(), (usize, usize)> {
                 #encoder_fields;
                 Ok(())
             }

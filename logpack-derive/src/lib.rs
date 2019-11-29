@@ -11,8 +11,8 @@ use std::process::Command;
 use std::collections::HashSet;
 
 use proc_macro::TokenStream;
-use proc_macro2::{Span, TokenStream as Tokens};
-use syn::{DeriveInput, GenericParam, Generics, Ident};
+use proc_macro2::{TokenStream as Tokens};
+use syn::{DeriveInput, GenericParam, Generics};
 use quote::quote;
 
 #[proc_macro_derive(Logpack, attributes(Logpack))]
@@ -47,8 +47,7 @@ fn tokens_to_rustfmt_file(filename: &std::path::Path, expanded: &Tokens) {
 fn add_trait_bounds(
     mut generics: Generics,
     skip_set: &HashSet<String>,
-    trait_names: &[&str],
-    mn: &Ident,
+    trait_names: &[Tokens],
 ) -> Generics {
     for param in &mut generics.params {
         if let GenericParam::Type(ref mut type_param) = *param {
@@ -56,10 +55,11 @@ fn add_trait_bounds(
                 continue;
             }
             for trait_name in trait_names {
-                let trait_name = Ident::new(*trait_name, Span::call_site());
-                let bound = syn::parse(quote! { #mn::#trait_name }.into()).unwrap();
+                let bound = syn::parse(quote! { #trait_name }.into()).unwrap();
                 type_param.bounds.push(bound);
             }
+            let bound = syn::parse(quote! { 'static }.into()).unwrap();
+            type_param.bounds.push(bound);
         }
     }
     generics

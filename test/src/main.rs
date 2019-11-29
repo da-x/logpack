@@ -9,6 +9,12 @@ use std::fmt::Debug;
 use std::io::BufRead;
 
 #[derive(Logpack, Debug, Eq, PartialEq, Deserialize)]
+pub struct GenericType<T> {
+    test: T,
+    field: u32,
+}
+
+#[derive(Logpack, Debug, Eq, PartialEq, Deserialize)]
 pub enum SimpleEnum {
     WithUnit,
     TupleField(u32),

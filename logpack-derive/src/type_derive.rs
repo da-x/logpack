@@ -9,10 +9,9 @@ pub fn derive(input: &DeriveInput) -> Tokens {
     let generics = super::add_trait_bounds(
         input.generics.clone(),
         &HashSet::new(),
-        &["logpack::Logpack"],
-        &name,
+        &[quote!{ logpack::Logpack }],
     );
-    let (_, ty_generics, where_clause) = generics.split_for_impl();
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
     let fields = match &input.data {
         Data::Enum(data) => {
@@ -29,7 +28,7 @@ pub fn derive(input: &DeriveInput) -> Tokens {
     };
 
      let result = quote! {
-         impl #ty_generics logpack::Logpack for #name #ty_generics #where_clause {
+         impl #impl_generics logpack::Logpack for #name #ty_generics #where_clause {
              fn logpack_describe(st: &mut logpack::SeenTypes) ->
                  logpack::Description<logpack::TypeNameId, logpack::FieldName>
              {
